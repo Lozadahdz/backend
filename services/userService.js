@@ -16,20 +16,45 @@ const registerUser = async (name, email, password) => {
 };
 
 const loginUser = async (email, password) => {
-  const user = await userRepository.findByEmail(email);
-  if (!user) {
-    throw new Error('Usuario no encontrado');
+  try {
+    // Buscar el usuario por correo electrónico
+    const user = await userRepository.findByEmail(email);
+    
+    // Verificar si el usuario no existe
+    if (!user) {
+      throw { status: 404, message: 'Usuario no encontrado' };
+    }
+
+    // Verificar que la contraseña coincida
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      throw { status: 401, message: 'Contraseña incorrecta' };
+    }
+
+    // Crear el payload con la información relevante
+    const payload = {
+      userId: user._id,
+      email: user.email,  // Puedes agregar más datos aquí si lo necesitas
+    };
+
+    // Firmar el JWT con la clave secreta y el tiempo de expiración
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+    // Retornar el token al usuario
+    return { token, user: {
+      id: user._id,
+      email: user.email,
+      name: user.name, // Si tienes un campo de nombre
+    },};
+    
+  } catch (error) {
+    // En caso de error, manejarlo apropiadamente
+    if (error.status) {
+      throw error;  // Si es un error personalizado, se lanza tal cual
+    }
+    throw { status: 500, message: 'Error en el servidor', details: error.message };
   }
-
-  const isMatch = await user.matchPassword(password);
-  if (!isMatch) {
-    throw new Error('Contraseña incorrecta');
-  }
-
-  const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-
-  return { token };
-};
+}
 
 const getUserProfile = async (userId) => {
   const user = await userRepository.findById(userId);
